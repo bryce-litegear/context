@@ -1,0 +1,1 @@
+# Pseudo Closure example in C
