@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <string.h>
 
+#ifndef USE_MALLOC
 
 #define BLKS 64
 #define BLK_SIZE (sizeof(uint64_t) * 32)
@@ -45,18 +46,33 @@ static context_blk_t *allocate_space(size_t *needed)
     return NULL;
 }
 
-size_t free_context_blk(context_blk_t *blk)
+void free_context_blk(context_blk_t *blk)
 {
-    uint32_t index = (space_blk_t*)blk - space;
-    if(&space[index] == (space_blk_t*)blk)
+    ptrdiff_t index = (space_blk_t*)blk - space;  // pointer math
+    assert(index >= 0);
+    if(&space[index] == (space_blk_t*)blk) // validate pointer alignment 
     {
         memset(&in_use[index], 0, blk->size/sizeof(space_blk_t));
     }
     else
     {
+        // run time error will lose memory block
         assert(&space[index] == (space_blk_t*)blk);
     }
 }
+
+#else
+static context_blk_t *allocate_space(size_t *needed)
+{
+    context_blk_t *blk = malloc(needed);
+    return blk;
+}
+
+size_t free_context_blk(context_blk_t *blk)
+{
+    free(blk);
+}
+#endif
 
 context_blk_t *package_context(context_func_t func, void *user_context, size_t uc_size, size_t workspace)
 {
@@ -67,8 +83,8 @@ context_blk_t *package_context(context_func_t func, void *user_context, size_t u
         memcpy(blk, 
             &(context_blk_t){.target_func=func, .size=total, .useable=workspace},
             sizeof(context_blk_t));
-        memcpy(&blk->user_context, user_context, uc_size);
-        memset(&((uint8_t*)&blk->user_context)[uc_size], 0, workspace);
+        memcpy(blk->user_context, user_context, uc_size);
+        memset(&((uint8_t*)blk->user_context)[uc_size], 0, workspace);
     }
     return blk;
 }
